@@ -81,7 +81,6 @@
         .btn-execute-swap { background: var(--swap-color); color: white; width: 100%; margin-top: 15px; box-shadow: 0 4px 10px rgba(249, 115, 22, 0.2); }
         .btn-execute-swap:hover { background: #ea580c; transform: translateY(-2px); }
 
-        /* ستايل سجل التبديل الجديد */
         .swap-history-container { margin-top: 12px; text-align: right; border-top: 1px dashed #cbd5e1; padding-top: 12px; }
         .history-title { font-size: 0.9rem; font-weight: 700; color: #c2410c; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
         .history-counter { background: #ffedd5; color: #ea580c; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; }
@@ -110,6 +109,10 @@
         .is-today .teacher-name { color: white; font-size: 1.05rem; }
         .is-today .teacher-phone-text { color: #fef08a; }
         .is-today .action-circle-btn { background-color: rgba(255, 255, 255, 0.25); border-color: rgba(255, 255, 255, 0.4); color: #ffffff; }
+
+        .is-swapped-cell { background-color: #fff7ed !important; } 
+        .swap-indicator-tag { display: inline-flex; align-items: center; gap: 4px; background: #ffedd5; color: #ea580c; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px; border: 1px solid #fed7aa; cursor: help; }
+        .is-today .swap-indicator-tag { background: rgba(255, 255, 255, 0.3); color: #ffffff; border-color: rgba(255, 255, 255, 0.5); }
 
         .subject-tag { background: var(--primary-light); color: var(--primary); padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 0.85rem; display: inline-block; }
         .teacher-block { display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -211,7 +214,6 @@
     let localGlobalData = []; 
     let currentSelectedOriginIdx = null; 
     
-    // مصفوفة جديدة لتخزين تاريخ عمليات التبديل التي تتم في الجلسة الحالية
     let swapHistoryLog = []; 
     
     const now = new Date();
@@ -343,7 +345,6 @@
         const cleanPhone = teacher.phone.replace(/\D/g, '');
         const actionRow = cleanPhone ? `<div class="side-actions"><a href="tel:${cleanPhone}" class="side-btn side-btn-call"><i class="fa-solid fa-phone"></i> اتصال</a><a href="https://api.whatsapp.com/send?phone=${cleanPhone.length === 8 ? '968' + cleanPhone : cleanPhone}" target="_blank" class="side-btn side-btn-whatsapp"><i class="fa-brands fa-whatsapp"></i> واتساب</a></div>` : `<div style="color:var(--text-muted); font-size:0.9rem;">لا توجد أرقام اتصال متوفرة</div>`;
 
-        // فلترة سجل التبديل الخاص بهذا المعلم بالتحديد (سواء كان هو الأصلي أو البديل)
         const teacherLog = swapHistoryLog.filter(log => log.originalTeacher === teacher.name || log.substituteTeacher === teacher.name);
         const swapCount = teacherLog.length;
 
@@ -358,7 +359,6 @@
                     <div class="history-list">
             `;
             teacherLog.forEach(log => {
-                // تحديد الطرف الآخر في التبديل لعرضه كـ "معلم بديل"
                 const companion = log.originalTeacher === teacher.name ? log.substituteTeacher : log.originalTeacher;
                 historyHtml += `
                     <div class="history-item">
@@ -423,7 +423,16 @@
                 hasData = true;
 
                 const matchedToday = checkIsToday(fullDateStr);
-                const activeClass = matchedToday ? 'is-today' : '';
+                
+                // البحث في السجل لمعرفة ما إذا كان هذا اليوم قد طرأ عليه تبديل
+                const swapRecord = swapHistoryLog.find(log => log.dutyDate === fullDateStr);
+                const isSwapped = !!swapRecord;
+                
+                let activeClass = matchedToday ? 'is-today' : '';
+                if (isSwapped && !matchedToday) {
+                    activeClass += ' is-swapped-cell';
+                }
+                
                 const parts = fullDateStr.split(" ");
                 const dateNum = parts.slice(1).join(" ") || fullDateStr;
 
@@ -432,7 +441,14 @@
                     const cleanPhone = String(row[3] || "").replace(/\D/g, '');
                     const commButtons = cleanPhone ? `<a href="tel:${cleanPhone}" class="action-circle-btn btn-call"><i class="fa-solid fa-phone"></i></a><a href="https://api.whatsapp.com/send?phone=${cleanPhone.length === 8 ? '968' + cleanPhone : cleanPhone}" target="_blank" class="action-circle-btn btn-whatsapp"><i class="fa-brands fa-whatsapp"></i></a>` : '';
                     
-                    teacherCellContent = `<div class="teacher-block"><span class="teacher-name">${row[2]}</span><span class="teacher-phone-text">${row[3] || 'بدون رقم'}</span><div class="action-buttons-container">${commButtons}<button onclick="initiateSwapInterface(${idx})" class="action-circle-btn btn-swap-trigger"><i class="fa-solid fa-arrows-rotate"></i></button></div></div>`;
+                    // تفعيل الـ title لإظهار اسم المعلم الأصلي الذي تم استبداله عند وقوف الماوس على الأيقونة
+                    let swapBadge = '';
+                    if (isSwapped) {
+                        const originalName = swapRecord.originalTeacher === row[2] ? swapRecord.substituteTeacher : swapRecord.originalTeacher;
+                        swapBadge = `<span class="swap-indicator-tag" title="تم التبادل مع المعلم: ${originalName}"><i class="fa-solid fa-right-left"></i> متبدل</span>`;
+                    }
+                    
+                    teacherCellContent = `<div class="teacher-block">${swapBadge}<span class="teacher-name">${row[2]}</span><span class="teacher-phone-text">${row[3] || 'بدون رقم'}</span><div class="action-buttons-container">${commButtons}<button onclick="initiateSwapInterface(${idx})" class="action-circle-btn btn-swap-trigger"><i class="fa-solid fa-arrows-rotate"></i></button></div></div>`;
                 }
 
                 if (matchedToday) {
@@ -470,7 +486,7 @@
             }
             sideCardContent.innerHTML = `
                 <div class="side-monitor-card" style="background:#f1f5f9; border-color:#cbd5e1;">
-                    <div class="side-monitor-avatar" style="background:#e2e8f0; color:var(--text-muted);"><i class="fa-solid fa-user-slash"></i></div>
+                    <div class="side-monitor-avatar" style="background:#e2e2e0; color:var(--text-muted);"><i class="fa-solid fa-user-slash"></i></div>
                     <div class="side-monitor-name" style="font-size:1.05rem; color:var(--text-muted);">${stateMessage}</div>
                 </div>`;
         }
@@ -491,7 +507,7 @@
                 count++;
             }
         }
-        targetSelect.innerHTML = count > 0 ? optionsHtml : '<option value="">لا يوجد زملاء متاحين من نفس التخصص</option>';
+        targetSelect.innerHTML = count > 0 ? optionsHtml : '<option value="">لا يوجد معلم متاح من نفس التخصص للتبديل معه</option>';
         document.getElementById('side-swap-box').style.display = 'block';
     }
 
@@ -503,16 +519,33 @@
         const originPhone = localGlobalData[currentSelectedOriginIdx][3];
         const targetTeacher = localGlobalData[targetIdx][2];
         const targetPhone = localGlobalData[targetIdx][3];
-        const dutyDateStr = localGlobalData[currentSelectedOriginIdx][0]; // تاريخ اليوم الذي تم استبداله
+        const dutyDateStr = localGlobalData[currentSelectedOriginIdx][0]; 
 
-        // حفظ سجل التبديل الجديد في المصفوفة قبل إجراء المقاصة
+        const swapData = {
+            teacherName: originTeacher,
+            dutyDate: dutyDateStr,
+            swappedWith: targetTeacher
+        };
+
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+            document.getElementById('side-swap-box').style.opacity = "0.5";
+            
+            google.script.run.withSuccessHandler(function() {
+                document.getElementById('side-swap-box').style.opacity = "1";
+                finalizeLocalSwap(originTeacher, originPhone, targetTeacher, targetPhone, dutyDateStr, targetIdx);
+            }).saveSwapToSheet(swapData);
+        } else {
+            finalizeLocalSwap(originTeacher, originPhone, targetTeacher, targetPhone, dutyDateStr, targetIdx);
+        }
+    }
+
+    function finalizeLocalSwap(originTeacher, originPhone, targetTeacher, targetPhone, dutyDateStr, targetIdx) {
         swapHistoryLog.push({
             originalTeacher: originTeacher,
             substituteTeacher: targetTeacher,
             dutyDate: dutyDateStr
         });
         
-        // إجراء عملية التبديل الفعلي في البيانات
         localGlobalData[currentSelectedOriginIdx][2] = targetTeacher;
         localGlobalData[currentSelectedOriginIdx][3] = targetPhone;
         localGlobalData[targetIdx][2] = originTeacher;
@@ -520,10 +553,8 @@
 
         document.getElementById('side-swap-box').style.display = 'none';
         
-        // إعادة تصيير الواجهة لتحديث الأيام
         renderDynamicLayout();
 
-        // تحديث بطاقة البحث تلقائياً لتعكس البيانات الجديدة وسجل التبديل فوراً
         const searchSelect = document.getElementById('teacher-search-select');
         if (searchSelect.value) {
             handleTeacherSearch(searchSelect.value);
