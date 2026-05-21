@@ -1,0 +1,127 @@
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index')
+      .setTitle('سجل المناوبة المطور - مدرسة الشيخ جاعد')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function getScheduleData() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("جدول المناوبة");
+    return sheet ? sheet.getDataRange().getDisplayValues() : [];
+  } catch (e) { 
+    return []; 
+  }
+}
+
+function generateDutySchedule() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tSheet = ss.getSheetByName("المعلمين");
+  if (!tSheet) {
+    SpreadsheetApp.getUi().alert("خطأ: لم يتم العثور على ورقة باسم 'المعلمين'!");
+    return;
+  }
+  
+  var tData = tSheet.getDataRange().getValues();
+  if (tData.length <= 1) {
+    SpreadsheetApp.getUi().alert("خطأ: ورقة المعلمين فارغة أو تحتوي على العناوين فقط.");
+    return;
+  }
+  
+  // تنظيف العناوين لضمان مطابقتها
+  var headers = tData[0].map(function(h) { return h.toString().trim(); });
+  var nameIdx = headers.indexOf("الاسم");
+  var subIdx = headers.indexOf("التخصص");
+  var phoneIdx = headers.indexOf("الهاتف"); 
+  
+  if (nameIdx === -1 || subIdx === -1) {
+    SpreadsheetApp.getUi().alert("خطأ: تأكد من وجود أعمدة باسم 'الاسم' و 'التخصص' في ورقة المعلمين.");
+    return;
+  }
+  
+  // تجميع كافة المعلمين في مصفوفة واحدة لضمان تدويرهم جميعاً بلا استثناء
+  var allTeachers = [];
+  for (var i = 1; i < tData.length; i++) {
+    var name = tData[i][nameIdx];
+    var sub = tData[i][subIdx];
+    var phone = phoneIdx !== -1 ? tData[i][phoneIdx] : ""; 
+    
+    if (name && sub) {
+      allTeachers.push({
+        name: name.toString().trim(),
+        subject: sub.toString().trim(),
+        phone: phone.toString().trim()
+      });
+    }
+  }
+  
+  if (allTeachers.length === 0) {
+    SpreadsheetApp.getUi().alert("تنبيه: لا توجد بيانات معلمين صالحة لجدولة المناوبة.");
+    return;
+  }
+
+  var dSheet = ss.getSheetByName("جدول المناوبة") || ss.insertSheet("جدول المناوبة");
+  dSheet.clear();
+  
+  var finalRows = [["اليوم والتاريخ", "التخصص المكلّف", "المعلم المناوب", "الهاتف"]];
+  
+  // مؤشر التدوير الآلي للمعلمين
+  var teacherRotationIdx = 0;
+  
+  // إعداد نطاق الـ 4 أشهر (من اليوم الحالي)
+  var startDate = new Date();
+  var endDate = new Date();
+  endDate.setMonth(endDate.getMonth() + 4); // إضافة 4 أشهر كاملة
+  
+  var curr = new Date(startDate.getTime());
+  
+  // حلقة تكرار تمر على الأيام يوماً تلو الآخر حتى نهاية الـ 4 أشهر
+  while (curr <= endDate) { 
+    var dayOfWeek = curr.getDay();
+    
+    // استثناء الإجازة الأسبوعية (الجمعة 5 والسبت 6)
+    if (dayOfWeek === 5 || dayOfWeek === 6) { 
+      curr.setDate(curr.getDate() + 1);
+      continue; 
+    }
+    
+    var dayName = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"][dayOfWeek];
+    var dateStr = dayName + " " + curr.getDate() + "/" + (curr.getMonth() + 1) + "/" + curr.getFullYear();
+    
+    // اختيار المعلم الحالي بناءً على الدور الآلي المباشر
+    var currentTeacher = allTeachers[teacherRotationIdx];
+    
+    finalRows.push([
+      dateStr, 
+      currentTeacher.subject, 
+      currentTeacher.name, 
+      currentTeacher.phone
+    ]);
+    
+    // الانتقال آلياً للمعلم التالي في القائمة الشاملة، وإذا انتهت الأسماء يبدأ من البداية
+    teacherRotationIdx = (teacherRotationIdx + 1) % allTeachers.length;
+    
+    // الانتقال لليوم التالي
+    curr.setDate(curr.getDate() + 1);
+  }
+  
+  // كتابة البيانات وتنسيقها في الشيت
+  dSheet.getRange(1, 1, finalRows.length, 4).setValues(finalRows);
+  
+  // ضبط الاتجاه والتنسيق الجمالي
+  dSheet.setRightToLeft(true);
+  
+  // تنسيق الهيدر (أزرق داكن ونص أبيض مائل للوسط)
+  var headerRange = dSheet.getRange(1, 1, 1, 4);
+  headerRange.setFontWeight("bold")
+             .setBackground("#1e3a8a")
+             .setFontColor("white")
+             .setHorizontalAlignment("center");
+             
+  // محاذاة بقية الجدول في المنتصف لشكل أرتب
+  dSheet.getRange(2, 1, finalRows.length - 1, 4).setHorizontalAlignment("center");
+  
+  dSheet.autoResizeColumns(1, 4);
+  
+  SpreadsheetApp.getUi().alert("تم بنجاح! تم توليد جدول المناوبة الشامل لجميع المعلمين لمدة 4 أشهر وتنسيقه.");
+}
