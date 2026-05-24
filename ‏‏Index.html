@@ -110,8 +110,9 @@
         .is-today .teacher-phone-text { color: #fef08a; }
         .is-today .action-circle-btn { background-color: rgba(255, 255, 255, 0.25); border-color: rgba(255, 255, 255, 0.4); color: #ffffff; }
 
+        /* ستايل لتمييز خلية المعلم الذي تم تبديله */
         .is-swapped-cell { background-color: #fff7ed !important; } 
-        .swap-indicator-tag { display: inline-flex; align-items: center; gap: 4px; background: #ffedd5; color: #ea580c; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px; border: 1px solid #fed7aa; cursor: help; }
+        .swap-indicator-tag { display: inline-flex; align-items: center; gap: 4px; background: #ffedd5; color: #ea580c; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px; border: 1px solid #fed7aa; }
         .is-today .swap-indicator-tag { background: rgba(255, 255, 255, 0.3); color: #ffffff; border-color: rgba(255, 255, 255, 0.5); }
 
         .subject-tag { background: var(--primary-light); color: var(--primary); padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 0.85rem; display: inline-block; }
@@ -424,10 +425,10 @@
 
                 const matchedToday = checkIsToday(fullDateStr);
                 
-                // البحث في السجل لمعرفة ما إذا كان هذا اليوم قد طرأ عليه تبديل
-                const swapRecord = swapHistoryLog.find(log => log.dutyDate === fullDateStr);
-                const isSwapped = !!swapRecord;
+                // فحص ما إذا كانت هذه الخلية بالتحديد قد تم إجراء عملية تبديل لها
+                const isSwapped = swapHistoryLog.some(log => log.dutyDate === fullDateStr);
                 
+                // بناء الكلاسات الخاصة بالخلية بناءً على حالتها (اليوم الحالي / متبدل)
                 let activeClass = matchedToday ? 'is-today' : '';
                 if (isSwapped && !matchedToday) {
                     activeClass += ' is-swapped-cell';
@@ -441,12 +442,8 @@
                     const cleanPhone = String(row[3] || "").replace(/\D/g, '');
                     const commButtons = cleanPhone ? `<a href="tel:${cleanPhone}" class="action-circle-btn btn-call"><i class="fa-solid fa-phone"></i></a><a href="https://api.whatsapp.com/send?phone=${cleanPhone.length === 8 ? '968' + cleanPhone : cleanPhone}" target="_blank" class="action-circle-btn btn-whatsapp"><i class="fa-brands fa-whatsapp"></i></a>` : '';
                     
-                    // تفعيل الـ title لإظهار اسم المعلم الأصلي الذي تم استبداله عند وقوف الماوس على الأيقونة
-                    let swapBadge = '';
-                    if (isSwapped) {
-                        const originalName = swapRecord.originalTeacher === row[2] ? swapRecord.substituteTeacher : swapRecord.originalTeacher;
-                        swapBadge = `<span class="swap-indicator-tag" title="تم التبادل مع المعلم: ${originalName}"><i class="fa-solid fa-right-left"></i> متبدل</span>`;
-                    }
+                    // إضافة وسم "بديل متبدل" فوق اسم المعلم إذا تمت العملية
+                    const swapBadge = isSwapped ? `<span class="swap-indicator-tag"><i class="fa-solid fa-right-left"></i> متبدل</span>` : '';
                     
                     teacherCellContent = `<div class="teacher-block">${swapBadge}<span class="teacher-name">${row[2]}</span><span class="teacher-phone-text">${row[3] || 'بدون رقم'}</span><div class="action-buttons-container">${commButtons}<button onclick="initiateSwapInterface(${idx})" class="action-circle-btn btn-swap-trigger"><i class="fa-solid fa-arrows-rotate"></i></button></div></div>`;
                 }
@@ -486,7 +483,7 @@
             }
             sideCardContent.innerHTML = `
                 <div class="side-monitor-card" style="background:#f1f5f9; border-color:#cbd5e1;">
-                    <div class="side-monitor-avatar" style="background:#e2e2e0; color:var(--text-muted);"><i class="fa-solid fa-user-slash"></i></div>
+                    <div class="side-monitor-avatar" style="background:#e2e8f0; color:var(--text-muted);"><i class="fa-solid fa-user-slash"></i></div>
                     <div class="side-monitor-name" style="font-size:1.05rem; color:var(--text-muted);">${stateMessage}</div>
                 </div>`;
         }
