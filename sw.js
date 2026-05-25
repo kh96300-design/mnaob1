@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jaad-school-v1';
+const CACHE_NAME = 'jaad-school-v2';
 const ASSETS = [
   '/',
   'Index.html',
