@@ -527,14 +527,13 @@
         const targetIdx = document.getElementById('swap-target-select').value;
         if (!targetIdx || !currentSelectedOriginIdx) return;
 
-        // تحديد اليوم المستهدف لتغيير نص التلميح
         const fullDateStr = localGlobalData[currentSelectedOriginIdx][0];
         let dayHint = "ادخل الرمز للتبديل";
-        if (fullDateStr.includes("الأحد")) dayHint = "أدخل رمز يوم الأحد المعين";
-        else if (fullDateStr.includes("الإثنين")) dayHint = "أدخل رمز يوم الإثنين المعين";
-        else if (fullDateStr.includes("الثلاثاء")) dayHint = "أدخل رمز يوم الثلاثاء المعين";
-        else if (fullDateStr.includes("الأربعاء")) dayHint = "أدخل رمز يوم الأربعاء المعين";
-        else if (fullDateStr.includes("الخميس")) dayHint = "أدخل رمز يوم الخميس المعين";
+        if (fullDateStr.includes("الأحد")) dayHint = "أدخل رمز يوم الأحد أو الرمز العام";
+        else if (fullDateStr.includes("الإثنين")) dayHint = "أدخل رمز يوم الإثنين أو الرمز العام";
+        else if (fullDateStr.includes("الثلاثاء")) dayHint = "أدخل رمز يوم الثلاثاء أو الرمز العام";
+        else if (fullDateStr.includes("الأربعاء")) dayHint = "أدخل رمز يوم الأربعاء أو الرمز العام";
+        else if (fullDateStr.includes("الخميس")) dayHint = "أدخل رمز يوم الخميس أو الرمز العام";
 
         document.getElementById('auth-hint-label').textContent = dayHint;
         document.getElementById('btn-trigger-auth').style.display = 'none';
@@ -558,7 +557,6 @@
         const fullDateStr = localGlobalData[currentSelectedOriginIdx][0];
         let requiredCode = "";
 
-        // فحص اليوم من السلسلة النصية وتخصيص الرمز المطلوب بناءً عليه
         if (fullDateStr.includes("الأحد")) {
             requiredCode = "123";
         } else if (fullDateStr.includes("الإثنين")) {
@@ -571,8 +569,8 @@
             requiredCode = "1234567";
         }
 
-        // التحقق من مطابقة الرمز المدخل للرمز المخصص لليوم المحدد
-        if (requiredCode === "" || accessCode !== requiredCode) {
+        // التحقق مما إذا كان الرمز المدخل يطابق الرمز المخصص لليوم أو الرمز الماستر العام 9999
+        if (accessCode !== "9999" && (requiredCode === "" || accessCode !== requiredCode)) {
             document.getElementById('auth-secret-code').value = '';
             document.getElementById('auth-secret-code').focus();
             return;
