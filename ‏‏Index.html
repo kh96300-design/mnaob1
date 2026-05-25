@@ -81,6 +81,17 @@
         .btn-execute-swap { background: var(--swap-color); color: white; width: 100%; margin-top: 15px; box-shadow: 0 4px 10px rgba(249, 115, 22, 0.2); }
         .btn-execute-swap:hover { background: #ea580c; transform: translateY(-2px); }
 
+        /* تصفيف قسم التحقق الداخلي الجديد */
+        .inline-auth-box { background: #fee2e2; border: 1px solid #fca5a5; padding: 12px; border-radius: 8px; margin-top: 15px; display: flex; flex-direction: column; gap: 8px; animation: fadeIn 0.3s ease; }
+        .inline-auth-label { font-size: 0.9rem; font-weight: 700; color: #991b1b; }
+        .inline-auth-input { padding: 8px 12px; border-radius: 6px; border: 1px solid #f87171; font-size: 1rem; text-align: center; font-weight: 700; letter-spacing: 2px; outline: none; }
+        .inline-auth-input:focus { border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15); }
+        .inline-auth-actions { display: flex; gap: 8px; }
+        .btn-auth-confirm { background: #dc2626; color: white; flex: 2; padding: 8px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; border: none; cursor: pointer; }
+        .btn-auth-cancel { background: #e2e8f0; color: #475569; flex: 1; padding: 8px; border-radius: 6px; font-weight: 500; font-size: 0.9rem; border: none; cursor: pointer; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
         .swap-history-container { margin-top: 12px; text-align: right; border-top: 1px dashed #cbd5e1; padding-top: 12px; }
         .history-title { font-size: 0.9rem; font-weight: 700; color: #c2410c; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
         .history-counter { background: #ffedd5; color: #ea580c; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; }
@@ -110,7 +121,6 @@
         .is-today .teacher-phone-text { color: #fef08a; }
         .is-today .action-circle-btn { background-color: rgba(255, 255, 255, 0.25); border-color: rgba(255, 255, 255, 0.4); color: #ffffff; }
 
-        /* ستايل لتمييز خلية المعلم الذي تم تبديله */
         .is-swapped-cell { background-color: #fff7ed !important; } 
         .swap-indicator-tag { display: inline-flex; align-items: center; gap: 4px; background: #ffedd5; color: #ea580c; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; margin-bottom: 4px; border: 1px solid #fed7aa; }
         .is-today .swap-indicator-tag { background: rgba(255, 255, 255, 0.3); color: #ffffff; border-color: rgba(255, 255, 255, 0.5); }
@@ -158,7 +168,7 @@
 
     <div id="loader" class="loader">
         <i class="fa-solid fa-circle-notch fa-spin fa-3x" style="margin-bottom: 15px;"></i>
-        <p>جاري توليد وتوزيع جدول المناوبة التلقائي لمدة 4 أشهر...</p>
+        <p>جاري توليد وتوزيع جدول المناوبة التلقائي...</p>
     </div>
 
     <div class="main-layout" id="main-grid" style="display: none;">
@@ -182,9 +192,19 @@
                     <label>اختر الزميل البديل (نفس التخصص):</label>
                     <select id="swap-target-select" class="swap-select"></select>
                 </div>
-                <button class="side-btn btn-execute-swap" onclick="executeSwapProcess()">
+                
+                <button id="btn-trigger-auth" class="side-btn btn-execute-swap" onclick="showInlineAuthBox()">
                     <i class="fa-solid fa-check"></i> تأكيد وإجراء التبديل
                 </button>
+
+                <div id="inline-auth-panel" class="inline-auth-box" style="display: none;">
+                    <span class="inline-auth-label">ادخل الرمز للتبديل</span>
+                    <input type="password" id="auth-secret-code" class="inline-auth-input" placeholder="••••">
+                    <div class="inline-auth-actions">
+                        <button class="btn-auth-confirm" onclick="validateAndExecuteSwap()">تأكيد الرمز</button>
+                        <button class="btn-auth-cancel" onclick="cancelInlineAuth()">إلغاء</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -214,7 +234,6 @@
 <script>
     let localGlobalData = []; 
     let currentSelectedOriginIdx = null; 
-    
     let swapHistoryLog = []; 
     
     const now = new Date();
@@ -424,11 +443,8 @@
                 hasData = true;
 
                 const matchedToday = checkIsToday(fullDateStr);
-                
-                // فحص ما إذا كانت هذه الخلية بالتحديد قد تم إجراء عملية تبديل لها
                 const isSwapped = swapHistoryLog.some(log => log.dutyDate === fullDateStr);
                 
-                // بناء الكلاسات الخاصة بالخلية بناءً على حالتها (اليوم الحالي / متبدل)
                 let activeClass = matchedToday ? 'is-today' : '';
                 if (isSwapped && !matchedToday) {
                     activeClass += ' is-swapped-cell';
@@ -441,8 +457,6 @@
                 if (row[2] && row[2] !== "لا يوجد مناوب") {
                     const cleanPhone = String(row[3] || "").replace(/\D/g, '');
                     const commButtons = cleanPhone ? `<a href="tel:${cleanPhone}" class="action-circle-btn btn-call"><i class="fa-solid fa-phone"></i></a><a href="https://api.whatsapp.com/send?phone=${cleanPhone.length === 8 ? '968' + cleanPhone : cleanPhone}" target="_blank" class="action-circle-btn btn-whatsapp"><i class="fa-brands fa-whatsapp"></i></a>` : '';
-                    
-                    // إضافة وسم "بديل متبدل" فوق اسم المعلم إذا تمت العملية
                     const swapBadge = isSwapped ? `<span class="swap-indicator-tag"><i class="fa-solid fa-right-left"></i> متبدل</span>` : '';
                     
                     teacherCellContent = `<div class="teacher-block">${swapBadge}<span class="teacher-name">${row[2]}</span><span class="teacher-phone-text">${row[3] || 'بدون رقم'}</span><div class="action-buttons-container">${commButtons}<button onclick="initiateSwapInterface(${idx})" class="action-circle-btn btn-swap-trigger"><i class="fa-solid fa-arrows-rotate"></i></button></div></div>`;
@@ -505,12 +519,44 @@
             }
         }
         targetSelect.innerHTML = count > 0 ? optionsHtml : '<option value="">لا يوجد معلم متاح من نفس التخصص للتبديل معه</option>';
+        
+        // إعادة تهيئة العناصر لتأكيد العملية
+        cancelInlineAuth();
         document.getElementById('side-swap-box').style.display = 'block';
     }
 
-    function executeSwapProcess() {
+    // وظيفة: إظهار صندوق التحقق الداخلي بدلاً من الزر الرئيسي
+    function showInlineAuthBox() {
         const targetIdx = document.getElementById('swap-target-select').value;
         if (!targetIdx || !currentSelectedOriginIdx) return;
+
+        document.getElementById('btn-trigger-auth').style.display = 'none';
+        document.getElementById('inline-auth-panel').style.display = 'flex';
+        document.getElementById('auth-secret-code').value = '';
+        document.getElementById('auth-secret-code').focus();
+    }
+
+    // وظيفة: إلغاء التحقق وإعادة الزر الأصلي
+    function cancelInlineAuth() {
+        document.getElementById('inline-auth-panel').style.display = 'none';
+        document.getElementById('btn-trigger-auth').style.display = 'flex';
+        document.getElementById('auth-secret-code').value = '';
+    }
+
+    // وظيفة: فحص صحة الرمز وتنفيذ العملية داخلياً بشكل كامل دون أي نوافذ منبثقة
+    function validateAndExecuteSwap() {
+        const targetIdx = document.getElementById('swap-target-select').value;
+        const accessCode = document.getElementById('auth-secret-code').value;
+
+        if (!targetIdx || !currentSelectedOriginIdx) return;
+        
+        // التحقق من صحة الرمز المدخل
+        if (accessCode.trim() !== "123") {
+            // مسح الخانة والتركيز عليها مجدداً في حال الخطأ دون رسائل خطأ منبثقة
+            document.getElementById('auth-secret-code').value = '';
+            document.getElementById('auth-secret-code').focus();
+            return;
+        }
 
         const originTeacher = localGlobalData[currentSelectedOriginIdx][2];
         const originPhone = localGlobalData[currentSelectedOriginIdx][3];
@@ -521,16 +567,23 @@
         const swapData = {
             teacherName: originTeacher,
             dutyDate: dutyDateStr,
-            swappedWith: targetTeacher
+            swappedWith: targetTeacher,
+            secretKey: accessCode.trim()
         };
 
         if (typeof google !== 'undefined' && google.script && google.script.run) {
             document.getElementById('side-swap-box').style.opacity = "0.5";
             
-            google.script.run.withSuccessHandler(function() {
-                document.getElementById('side-swap-box').style.opacity = "1";
-                finalizeLocalSwap(originTeacher, originPhone, targetTeacher, targetPhone, dutyDateStr, targetIdx);
-            }).saveSwapToSheet(swapData);
+            google.script.run
+                .withSuccessHandler(function() {
+                    document.getElementById('side-swap-box').style.opacity = "1";
+                    finalizeLocalSwap(originTeacher, originPhone, targetTeacher, targetPhone, dutyDateStr, targetIdx);
+                })
+                .withFailureHandler(function() {
+                    document.getElementById('side-swap-box').style.opacity = "1";
+                    cancelInlineAuth();
+                })
+                .saveSwapToSheet(swapData);
         } else {
             finalizeLocalSwap(originTeacher, originPhone, targetTeacher, targetPhone, dutyDateStr, targetIdx);
         }
@@ -545,17 +598,15 @@
         
         localGlobalData[currentSelectedOriginIdx][2] = targetTeacher;
         localGlobalData[currentSelectedOriginIdx][3] = targetPhone;
+        
         localGlobalData[targetIdx][2] = originTeacher;
         localGlobalData[targetIdx][3] = originPhone;
 
+        // إخفاء اللوحة الجانبية وتحديث الجدول تلقائياً
         document.getElementById('side-swap-box').style.display = 'none';
-        
+        cancelInlineAuth();
         renderDynamicLayout();
-
-        const searchSelect = document.getElementById('teacher-search-select');
-        if (searchSelect.value) {
-            handleTeacherSearch(searchSelect.value);
-        }
+        buildTeacherSearchDropdown();
     }
 </script>
 </body>
