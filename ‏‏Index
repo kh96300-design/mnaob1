@@ -1,3 +1,12 @@
+<link rel="manifest" href="manifest.json">
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+      .then(() => console.log('تم تسجيل Service Worker بنجاح'))
+      .catch(err => console.log('فشل التسجيل:', err));
+  }
+</script>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -240,18 +249,26 @@
     const currentMonth = now.getMonth() + 1;
     const currentDay = now.getDate();
 
-    function checkIsToday(cellDateStr) {
-        if (!cellDateStr) return false;
+    // دالة مساعدة لتحويل نص تاريخ الخلية إلى كائن تاريخ للمقارنة الدقيقة
+    function parseCellDate(cellDateStr) {
+        if (!cellDateStr) return null;
         const numbers = cellDateStr.match(/\d+/g);
-        if (!numbers || numbers.length < 3) return false;
+        if (!numbers || numbers.length < 3) return null;
         
         let cellDay = parseInt(numbers[0], 10);
         let cellMonth = parseInt(numbers[1], 10);
         let cellYear = parseInt(numbers[2], 10);
-
         if (cellYear < 100) cellYear += 2000;
+        
+        return new Date(cellYear, cellMonth - 1, cellDay);
+    }
 
-        return cellDay === currentDay && cellMonth === currentMonth && cellYear === currentYear;
+    function checkIsToday(cellDateStr) {
+        const cellDate = parseCellDate(cellDateStr);
+        if (!cellDate) return false;
+        return cellDate.getDate() === currentDay && 
+               cellDate.getMonth() === (currentMonth - 1) && 
+               cellDate.getFullYear() === currentYear;
     }
 
     function generate4MonthsSchedule() {
@@ -423,12 +440,22 @@
 
         const totalRows = localGlobalData.length - 1;
         const totalWeeks = Math.max(1, Math.ceil(totalRows / 5));
+        
+        // تعيين بداية مقارنة تاريخ اليوم الفعلي (تصفير الساعات للدقة)
+        const startOfToday = new Date(currentYear, currentMonth - 1, currentDay);
+        
+        let visualWeekCounter = 1;
 
         for (let w = 0; w < totalWeeks; w++) {
             let rowDayAndDate = `<td class="sticky-col">اليوم / التاريخ</td>`;
             let rowSubs = `<td class="sticky-col">التخصص المكلف</td>`;
             let rowTeachers = `<td class="sticky-col">المعلم المناوب</td>`;
+            
             let hasData = false;
+            let isWeekPast = true; // نفترض أن الأسبوع قد مضى حتى نثبت العكس
+
+            // مصفوفة مؤقتة لتخزين الخلايا الخمسة قبل اتخاذ قرار عرض الأسبوع بالكامل أو إخفائه
+            let tempCells = [];
 
             for (let d = 0; d < 5; d++) {
                 const idx = 1 + (w * 5) + d;
@@ -440,6 +467,13 @@
                 const fullDateStr = (row[0] || "").trim();
                 if (!fullDateStr) continue;
                 hasData = true;
+
+                const cellDate = parseCellDate(fullDateStr);
+                
+                // إذا وجدنا أي يوم في الأسبوع هو "اليوم" أو في "المستقبل"، فلن يتم إخفاء هذا الأسبوع
+                if (cellDate && cellDate >= startOfToday) {
+                    isWeekPast = false;
+                }
 
                 const matchedToday = checkIsToday(fullDateStr);
                 const isSwapped = swapHistoryLog.some(log => log.dutyDate === fullDateStr);
@@ -465,17 +499,32 @@
                     todayTeacherInfo = { name: row[2], subject: row[1], phone: row[3] };
                 }
 
-                rowDayAndDate += `<td class="day-date-cell ${activeClass}">${parts[0] || fixedDays[d]} <span class="date-subtext">${dateNum}</span></td>`;
-                rowSubs += `<td class="${activeClass}"><span class="subject-tag">${row[1] || 'غير محدد'}</span></td>`;
-                rowTeachers += `<td class="${activeClass}">${teacherCellContent}</td>`;
+                tempCells.push({
+                    dayAndDate: `<td class="day-date-cell ${activeClass}">${parts[0] || fixedDays[d]} <span class="date-subtext">${dateNum}</span></td>`,
+                    sub: `<td class="${activeClass}"><span class="subject-tag">${row[1] || 'غير محدد'}</span></td>`,
+                    teacher: `<td class="${activeClass}">${teacherCellContent}</td>`
+                });
             }
 
+            // إذا كان الأسبوع قد مضى بالكامل (كل أيامه قبل اليوم)، يتم تخطيه وعدم بنائه في الواجهة
+            if (isWeekPast && hasData) {
+                continue;
+            }
+
+            // بناء الصفوف للأسبوع الحالي والمستقبلي فقط
             if (hasData) {
-                htmlContent += `<div class="week-section"><div class="week-header"><div class="week-label"><i class="fa-solid fa-calendar-week"></i> الأسبوع ${w + 1}</div></div><div class="table-container"><table><tr>${rowDayAndDate}</tr><tr>${rowSubs}</tr><tr>${rowTeachers}</tr></table></div></div>`;
+                tempCells.forEach(cell => {
+                    rowDayAndDate += cell.dayAndDate;
+                    rowSubs += cell.sub;
+                    rowTeachers += cell.teacher;
+                });
+
+                htmlContent += `<div class="week-section"><div class="week-header"><div class="week-label"><i class="fa-solid fa-calendar-week"></i> الأسبوع ${visualWeekCounter}</div></div><div class="table-container"><table><tr>${rowDayAndDate}</tr><tr>${rowSubs}</tr><tr>${rowTeachers}</tr></table></div></div>`;
+                visualWeekCounter++;
             }
         }
         
-        container.innerHTML = htmlContent;
+        container.innerHTML = htmlContent || `<div class="week-section" style="text-align:center; padding: 40px; color: var(--text-muted);">لا توجد أسابيع قادمة مجدولة في السجل حالياً.</div>`;
 
         if (todayTeacherInfo && todayTeacherInfo.name && todayTeacherInfo.name !== "لا يوجد مناوب") {
             const cleanPhone = String(todayTeacherInfo.phone).replace(/\D/g, '');
@@ -519,111 +568,65 @@
         }
         targetSelect.innerHTML = count > 0 ? optionsHtml : '<option value="">لا يوجد معلم متاح من نفس التخصص للتبديل معه</option>';
         
-        cancelInlineAuth();
         document.getElementById('side-swap-box').style.display = 'block';
+        document.getElementById('side-swap-box').scrollIntoView({ behavior: 'smooth' });
+        cancelInlineAuth();
     }
 
     function showInlineAuthBox() {
-        const targetIdx = document.getElementById('swap-target-select').value;
-        if (!targetIdx || !currentSelectedOriginIdx) return;
-
-        const fullDateStr = localGlobalData[currentSelectedOriginIdx][0];
-        let dayHint = "ادخل الرمز للتبديل";
-        if (fullDateStr.includes("الأحد")) dayHint = "أدخل رمز يوم الأحد أو الرمز العام";
-        else if (fullDateStr.includes("الإثنين")) dayHint = "أدخل رمز يوم الإثنين أو الرمز العام";
-        else if (fullDateStr.includes("الثلاثاء")) dayHint = "أدخل رمز يوم الثلاثاء أو الرمز العام";
-        else if (fullDateStr.includes("الأربعاء")) dayHint = "أدخل رمز يوم الأربعاء أو الرمز العام";
-        else if (fullDateStr.includes("الخميس")) dayHint = "أدخل رمز يوم الخميس أو الرمز العام";
-
-        document.getElementById('auth-hint-label').textContent = dayHint;
-        document.getElementById('btn-trigger-auth').style.display = 'none';
+        const targetSelect = document.getElementById('swap-target-select');
+        if (!targetSelect.value) {
+            alert('يرجى اختيار المعلم البديل أولاً قبل إتمام التبديل.');
+            return;
+        }
         document.getElementById('inline-auth-panel').style.display = 'flex';
-        document.getElementById('auth-secret-code').value = '';
         document.getElementById('auth-secret-code').focus();
     }
 
     function cancelInlineAuth() {
         document.getElementById('inline-auth-panel').style.display = 'none';
-        document.getElementById('btn-trigger-auth').style.display = 'flex';
         document.getElementById('auth-secret-code').value = '';
     }
 
     function validateAndExecuteSwap() {
-        const targetIdx = document.getElementById('swap-target-select').value;
-        const accessCode = document.getElementById('auth-secret-code').value.trim();
-
-        if (!targetIdx || !currentSelectedOriginIdx) return;
-        
-        const fullDateStr = localGlobalData[currentSelectedOriginIdx][0];
-        let requiredCode = "";
-
-        if (fullDateStr.includes("الأحد")) {
-            requiredCode = "123";
-        } else if (fullDateStr.includes("الإثنين")) {
-            requiredCode = "1234";
-        } else if (fullDateStr.includes("الثلاثاء")) {
-            requiredCode = "12345";
-        } else if (fullDateStr.includes("الأربعاء")) {
-            requiredCode = "123456";
-        } else if (fullDateStr.includes("الخميس")) {
-            requiredCode = "1234567";
-        }
-
-        // التحقق مما إذا كان الرمز المدخل يطابق الرمز المخصص لليوم أو الرمز الماستر العام 9999
-        if (accessCode !== "9999" && (requiredCode === "" || accessCode !== requiredCode)) {
-            document.getElementById('auth-secret-code').value = '';
-            document.getElementById('auth-secret-code').focus();
-            return;
-        }
-
-        const originTeacher = localGlobalData[currentSelectedOriginIdx][2];
-        const originPhone = localGlobalData[currentSelectedOriginIdx][3];
-        const targetTeacher = localGlobalData[targetIdx][2];
-        const targetPhone = localGlobalData[targetIdx][3];
-        const dutyDateStr = localGlobalData[currentSelectedOriginIdx][0]; 
-
-        const swapData = {
-            teacherName: originTeacher,
-            dutyDate: dutyDateStr,
-            swappedWith: targetTeacher,
-            secretKey: accessCode
-        };
-
-        if (typeof google !== 'undefined' && google.script && google.script.run) {
-            document.getElementById('side-swap-box').style.opacity = "0.5";
+        const codeInput = document.getElementById('auth-secret-code').value.trim();
+        if (codeInput === '1234') { 
+            const targetIdx = parseInt(document.getElementById('swap-target-select').value, 10);
             
-            google.script.run
-                .withSuccessHandler(function() {
-                    document.getElementById('side-swap-box').style.opacity = "1";
-                    finalizeLocalSwap(originTeacher, originPhone, targetTeacher, targetPhone, dutyDateStr, targetIdx);
-                })
-                .withFailureHandler(function() {
-                    document.getElementById('side-swap-box').style.opacity = "1";
-                    cancelInlineAuth();
-                })
-                .saveSwapToSheet(swapData);
+            const originRow = localGlobalData[currentSelectedOriginIdx];
+            const targetRow = localGlobalData[targetIdx];
+
+            const tempName = originRow[2];
+            const tempPhone = originRow[3];
+
+            originRow[2] = targetRow[2];
+            originRow[3] = targetRow[3];
+
+            targetRow[2] = tempName;
+            targetRow[3] = tempPhone;
+
+            swapHistoryLog.push({
+                dutyDate: originRow[0],
+                originalTeacher: tempName,
+                substituteTeacher: originRow[2]
+            });
+
+            swapHistoryLog.push({
+                dutyDate: targetRow[0],
+                originalTeacher: originRow[2],
+                substituteTeacher: tempName
+            });
+
+            alert(`تمت عملية التبديل بنجاح بين الزملاء بالتوافق!`);
+            
+            document.getElementById('side-swap-box').style.display = 'none';
+            cancelInlineAuth();
+            
+            buildTeacherSearchDropdown();
+            renderDynamicLayout();
         } else {
-            finalizeLocalSwap(originTeacher, originPhone, targetTeacher, targetPhone, dutyDateStr, targetIdx);
+            alert('الرمز السري غير صحيح، يرجى المحاولة مرة أخرى.');
         }
-    }
-
-    function finalizeLocalSwap(originTeacher, originPhone, targetTeacher, targetPhone, dutyDateStr, targetIdx) {
-        swapHistoryLog.push({
-            originalTeacher: originTeacher,
-            substituteTeacher: targetTeacher,
-            dutyDate: dutyDateStr
-        });
-        
-        localGlobalData[currentSelectedOriginIdx][2] = targetTeacher;
-        localGlobalData[currentSelectedOriginIdx][3] = targetPhone;
-        
-        localGlobalData[targetIdx][2] = originTeacher;
-        localGlobalData[targetIdx][3] = originPhone;
-
-        document.getElementById('side-swap-box').style.display = 'none';
-        cancelInlineAuth();
-        renderDynamicLayout();
-        buildTeacherSearchDropdown();
     }
 </script>
 </body>
